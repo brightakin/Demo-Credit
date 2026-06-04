@@ -1,10 +1,12 @@
 import express from "express";
 import dotenv from "dotenv";
+import morgan from "morgan";
 import swaggerUi from "swagger-ui-express";
 import userRoutes from "./routes/userRoutes";
 import walletRoutes from "./routes/walletRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 import { generateOpenApiSpec } from "./config/swagger";
+import logger from "./utils/logger";
 
 dotenv.config();
 
@@ -12,6 +14,14 @@ const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ─── HTTP request logging ─────────────────────────────────────────────────────
+const morganFormat = process.env.NODE_ENV === "production" ? "combined" : "dev";
+app.use(
+  morgan(morganFormat, {
+    stream: { write: (msg: string) => logger.http(msg.trim()) },
+  }),
+);
 
 // ─── Swagger Docs ────────────────────────────────────────────────────────────
 const openApiSpec = generateOpenApiSpec();
