@@ -42,7 +42,11 @@ export class TransactionModel {
 
   static async findByReference(
     reference: string,
+    trx?: Knex.Transaction,
   ): Promise<Transaction | undefined> {
-    return db<Transaction>(this.TABLE).where({ reference }).first();
+    const query = trx
+      ? trx<Transaction>(this.TABLE)
+      : db<Transaction>(this.TABLE);
+    return query.where({ reference }).first();
   }
 }

@@ -43,14 +43,21 @@ export const LoginSchema = z.object({
 
 // ─── WALLET SCHEMAS ──────────────────────────────────────────────────────────
 
+const IdempotencyKeySchema = z
+  .string()
+  .uuid("Idempotency key must be a valid UUID")
+  .openapi({ example: "8f7e17d2-7c42-4c2a-8e9b-4d6b7b4f6f42" });
+
 export const FundWalletSchema = z.object({
   amount: z
     .number()
     .positive("Amount must be greater than zero")
     .openapi({ example: 5000 }),
+  idempotencyKey: IdempotencyKeySchema,
 });
 
 export const TransferSchema = z.object({
+  idempotencyKey: IdempotencyKeySchema,
   receiver_email: z
     .string()
     .email("Invalid receiver email")
@@ -67,6 +74,7 @@ export const WithdrawSchema = z.object({
     .number()
     .positive("Amount must be greater than zero")
     .openapi({ example: 1000 }),
+  idempotencyKey: IdempotencyKeySchema,
   description: z.string().optional().openapi({ example: "ATM withdrawal" }),
 });
 

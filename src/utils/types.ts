@@ -49,9 +49,11 @@ export interface Transaction {
 
 export interface FundWalletDTO {
   amount: number;
+  idempotencyKey: string;
 }
 
 export interface TransferDTO {
+  idempotencyKey: string;
   receiver_email: string;
   amount: number;
   description?: string;
@@ -59,6 +61,7 @@ export interface TransferDTO {
 
 export interface WithdrawDTO {
   amount: number;
+  idempotencyKey: string;
   description?: string;
 }
 

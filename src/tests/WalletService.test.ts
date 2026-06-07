@@ -85,6 +85,8 @@ const mockReceiverUser = {
   is_blacklisted: false,
 };
 
+const IDEMPOTENCY_KEY = "8f7e17d2-7c42-4c2a-8e9b-4d6b7b4f6f42";
+
 describe("WalletService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -117,12 +119,14 @@ describe("WalletService", () => {
   // ═══════════════════════════════════════════════════════════════════════
   describe("fundWallet()", () => {
     it("should fund the wallet and return a transaction", async () => {
+      MockedTransactionModel.findByReference.mockResolvedValue(undefined);
       MockedWalletModel.findByUserId.mockResolvedValue(mockWallet);
       MockedWalletModel.updateBalance.mockResolvedValue(undefined);
       MockedTransactionModel.create.mockResolvedValue(mockTransaction);
 
       const result = await WalletService.fundWallet("user-abc", {
         amount: 500,
+        idempotencyKey: IDEMPOTENCY_KEY,
       });
 
       expect(mockDb.transaction).toHaveBeenCalledTimes(1);
@@ -137,9 +141,25 @@ describe("WalletService", () => {
       expect(result).toEqual(mockTransaction);
     });
 
+    it("should return existing transaction on retry with same idempotencyKey", async () => {
+      MockedWalletModel.findByUserId.mockResolvedValue(mockWallet);
+      MockedTransactionModel.findByReference.mockResolvedValue(mockTransaction);
+
+      const result = await WalletService.fundWallet("user-abc", {
+        amount: 500,
+        idempotencyKey: IDEMPOTENCY_KEY,
+      });
+
+      expect(result).toEqual(mockTransaction);
+      expect(mockDb.transaction).not.toHaveBeenCalled();
+    });
+
     it("should throw if amount is zero", async () => {
       await expect(
-        WalletService.fundWallet("user-abc", { amount: 0 }),
+        WalletService.fundWallet("user-abc", {
+          amount: 0,
+          idempotencyKey: IDEMPOTENCY_KEY,
+        }),
       ).rejects.toThrow("Amount must be greater than zero");
       // Guard clause fired before DB is touched
       expect(MockedWalletModel.findByUserId).not.toHaveBeenCalled();
@@ -147,15 +167,22 @@ describe("WalletService", () => {
 
     it("should throw if amount is negative", async () => {
       await expect(
-        WalletService.fundWallet("user-abc", { amount: -100 }),
+        WalletService.fundWallet("user-abc", {
+          amount: -100,
+          idempotencyKey: IDEMPOTENCY_KEY,
+        }),
       ).rejects.toThrow("Amount must be greater than zero");
     });
 
     it("should throw if wallet is not found", async () => {
+      MockedTransactionModel.findByReference.mockResolvedValue(undefined);
       MockedWalletModel.findByUserId.mockResolvedValue(undefined);
 
       await expect(
-        WalletService.fundWallet("user-abc", { amount: 500 }),
+        WalletService.fundWallet("user-abc", {
+          amount: 500,
+          idempotencyKey: IDEMPOTENCY_KEY,
+        }),
       ).rejects.toThrow("Wallet not found");
     });
   });
@@ -165,14 +192,18 @@ describe("WalletService", () => {
   // ═══════════════════════════════════════════════════════════════════════
   describe("transfer()", () => {
     const transferDTO = {
+      idempotencyKey: IDEMPOTENCY_KEY,
       receiver_email: "jane@example.com",
       amount: 200,
     };
 
     it("should transfer funds between wallets successfully", async () => {
+      MockedTransactionModel.findByReference.mockResolvedValue(undefined);
       MockedWalletModel.findByUserId
-        .mockResolvedValueOnce(mockWallet) // sender's wallet
-        .mockResolvedValueOnce(mockReceiverWallet); // receiver's wallet
+        .mockResolvedValueOnce(mockWallet)
+        .mockResolvedValueOnce(mockReceiverWallet)
+        .mockResolvedValueOnce(mockWallet)
+        .mockResolvedValueOnce(mockReceiverWallet);
 
       MockedUserModel.findByEmail.mockResolvedValue(mockReceiverUser);
       MockedUserModel.findById.mockResolvedValue(mockSenderUser);
@@ -201,6 +232,47 @@ describe("WalletService", () => {
       expect(result.type).toBe("transfer");
     });
 
+    it("should return existing transaction on retry with same idempotencyKey", async () => {
+      const existingTxn = {
+        ...mockTransaction,
+        type: "transfer" as const,
+        amount: 200,
+        reference: IDEMPOTENCY_KEY,
+        receiver_wallet_id: "wallet-xyz",
+      };
+
+      MockedTransactionModel.findByReference.mockResolvedValue(existingTxn);
+      MockedWalletModel.findByUserId
+        .mockResolvedValueOnce(mockWallet)
+        .mockResolvedValueOnce(mockReceiverWallet);
+      MockedUserModel.findByEmail.mockResolvedValue(mockReceiverUser);
+      MockedUserModel.findById.mockResolvedValue(mockSenderUser);
+
+      const result = await WalletService.transfer("user-abc", transferDTO);
+
+      expect(result).toEqual(existingTxn);
+      expect(mockDb.transaction).not.toHaveBeenCalled();
+    });
+
+    it("should throw if same idempotencyKey is reused with different amount", async () => {
+      MockedTransactionModel.findByReference.mockResolvedValue({
+        ...mockTransaction,
+        type: "transfer",
+        amount: 200,
+        reference: IDEMPOTENCY_KEY,
+        receiver_wallet_id: "wallet-xyz",
+      });
+      MockedWalletModel.findByUserId
+        .mockResolvedValueOnce(mockWallet)
+        .mockResolvedValueOnce(mockReceiverWallet);
+      MockedUserModel.findByEmail.mockResolvedValue(mockReceiverUser);
+      MockedUserModel.findById.mockResolvedValue(mockSenderUser);
+
+      await expect(
+        WalletService.transfer("user-abc", { ...transferDTO, amount: 500 }),
+      ).rejects.toThrow("Idempotency key reused with different details");
+    });
+
     it("should throw if amount is zero or negative", async () => {
       await expect(
         WalletService.transfer("user-abc", { ...transferDTO, amount: 0 }),
@@ -208,8 +280,14 @@ describe("WalletService", () => {
     });
 
     it("should throw if sender has insufficient balance", async () => {
-      // Wallet balance is 1000, trying to transfer 5000
-      MockedWalletModel.findByUserId.mockResolvedValue(mockWallet);
+      MockedTransactionModel.findByReference.mockResolvedValue(undefined);
+      MockedWalletModel.findByUserId
+        .mockResolvedValueOnce(mockWallet)
+        .mockResolvedValueOnce(mockReceiverWallet)
+        .mockResolvedValueOnce(mockWallet)
+        .mockResolvedValueOnce(mockReceiverWallet);
+      MockedUserModel.findByEmail.mockResolvedValue(mockReceiverUser);
+      MockedUserModel.findById.mockResolvedValue(mockSenderUser);
 
       await expect(
         WalletService.transfer("user-abc", { ...transferDTO, amount: 5000 }),
@@ -218,7 +296,7 @@ describe("WalletService", () => {
 
     it("should throw if receiver account does not exist", async () => {
       MockedWalletModel.findByUserId.mockResolvedValue(mockWallet);
-      MockedUserModel.findByEmail.mockResolvedValue(undefined); // no such user
+      MockedUserModel.findByEmail.mockResolvedValue(undefined);
 
       await expect(
         WalletService.transfer("user-abc", transferDTO),
@@ -227,13 +305,13 @@ describe("WalletService", () => {
 
     it("should throw if sender tries to transfer to themselves", async () => {
       MockedWalletModel.findByUserId.mockResolvedValue(mockWallet);
-      // findByEmail returns the SAME user as the sender
       MockedUserModel.findByEmail.mockResolvedValue(mockSenderUser);
       MockedUserModel.findById.mockResolvedValue(mockSenderUser);
 
       await expect(
         WalletService.transfer("user-abc", {
-          receiver_email: "john@example.com", // sender's own email
+          idempotencyKey: IDEMPOTENCY_KEY,
+          receiver_email: "john@example.com",
           amount: 200,
         }),
       ).rejects.toThrow("Cannot transfer funds to your own account");
@@ -245,6 +323,7 @@ describe("WalletService", () => {
   // ═══════════════════════════════════════════════════════════════════════
   describe("withdraw()", () => {
     it("should withdraw funds and return a transaction", async () => {
+      MockedTransactionModel.findByReference.mockResolvedValue(undefined);
       MockedWalletModel.findByUserId.mockResolvedValue(mockWallet);
       MockedWalletModel.updateBalance.mockResolvedValue(undefined);
       MockedTransactionModel.create.mockResolvedValue({
@@ -252,7 +331,10 @@ describe("WalletService", () => {
         type: "withdrawal",
       });
 
-      const result = await WalletService.withdraw("user-abc", { amount: 300 });
+      const result = await WalletService.withdraw("user-abc", {
+        amount: 300,
+        idempotencyKey: IDEMPOTENCY_KEY,
+      });
 
       // Balance: 1000 - 300 = 700
       expect(MockedWalletModel.updateBalance).toHaveBeenCalledWith(
@@ -265,29 +347,43 @@ describe("WalletService", () => {
 
     it("should throw if amount is zero or negative", async () => {
       await expect(
-        WalletService.withdraw("user-abc", { amount: -50 }),
+        WalletService.withdraw("user-abc", {
+          amount: -50,
+          idempotencyKey: IDEMPOTENCY_KEY,
+        }),
       ).rejects.toThrow("Amount must be greater than zero");
     });
 
     it("should throw if wallet is not found", async () => {
+      MockedTransactionModel.findByReference.mockResolvedValue(undefined);
       MockedWalletModel.findByUserId.mockResolvedValue(undefined);
 
       await expect(
-        WalletService.withdraw("user-abc", { amount: 300 }),
+        WalletService.withdraw("user-abc", {
+          amount: 300,
+          idempotencyKey: IDEMPOTENCY_KEY,
+        }),
       ).rejects.toThrow("Wallet not found");
     });
 
     it("should throw if balance is insufficient", async () => {
-      MockedWalletModel.findByUserId.mockResolvedValue(mockWallet); // balance: 1000
+      MockedTransactionModel.findByReference.mockResolvedValue(undefined);
+      MockedWalletModel.findByUserId.mockResolvedValue(mockWallet);
 
       await expect(
-        WalletService.withdraw("user-abc", { amount: 9999 }),
+        WalletService.withdraw("user-abc", {
+          amount: 9999,
+          idempotencyKey: IDEMPOTENCY_KEY,
+        }),
       ).rejects.toThrow("Insufficient balance");
     });
 
     it("should throw if attempting to withdraw exact 0", async () => {
       await expect(
-        WalletService.withdraw("user-abc", { amount: 0 }),
+        WalletService.withdraw("user-abc", {
+          amount: 0,
+          idempotencyKey: IDEMPOTENCY_KEY,
+        }),
       ).rejects.toThrow("Amount must be greater than zero");
     });
   });
