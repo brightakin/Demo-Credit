@@ -7,7 +7,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "dev": "nodemon --exec ts-node src/server.ts",
-    "migrate": "knex migrate:latest --knexfile src/config/knexfile.ts",
+    "migrate": "knex migrate:latest --knexfile dist/config/knexfile.js",
     "migrate:rollback": "knex migrate:rollback --knexfile src/config/knexfile.ts",
     "test": "jest --runInBand --forceExit",
     "test:coverage": "jest --coverage --runInBand --forceExit"
