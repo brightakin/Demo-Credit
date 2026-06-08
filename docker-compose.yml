@@ -1,0 +1,113 @@
+services:
+  # ─── MySQL Database ──────────────────────────────────────────────────────────
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3306:3306" # expose to host so you can connect with a GUI like TablePlus
+    volumes:
+      - db_data:/var/lib/mysql # persist data between restarts
+    healthcheck:
+      # Docker will probe MySQL every 5 seconds. The API container waits until
+      # this check passes before starting — prevents "connection refused" errors
+      # on startup.
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-u",
+          "root",
+          "-p${DB_PASSWORD}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ─── Development API (hot-reload) ────────────────────────────────────────────
+  # Use this during development: docker compose up dev
+  # Mounts your local src/ folder into the container, so every time you save a
+  # file nodemon detects the change and ts-node re-runs the app instantly.
+  # No image rebuild needed on code changes — only if you change package.json.
+  dev:
+    build:
+      context: .
+      target: builder # reuse the builder stage which has devDependencies
+    command: yarn dev
+    ports:
+      - "3001:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      ADJUTOR_API_KEY: ${ADJUTOR_API_KEY}
+      ADJUTOR_BASE_URL: ${ADJUTOR_BASE_URL}
+    volumes:
+      # Mount source code so file saves on your Mac are reflected immediately
+      - ./src:/app/src
+      # Prevent the host's node_modules from overwriting the container's
+      - /app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ─── Migrations ──────────────────────────────────────────────────────────────
+  # Runs `knex migrate:latest` once, then exits. Depends on db being healthy.
+  # This is a separate service so migrations always run before the API starts.
+  migrate:
+    build: .
+    command:
+      [
+        "node",
+        "-e",
+        "const knex=require('knex');const cfg=require('./dist/config/knexfile');const db=knex(cfg.default.production);db.migrate.latest({directory:'./dist/database/migrations',loadExtensions:['.js']}).then(()=>{console.log('Migrations complete');process.exit(0);}).catch(e=>{console.error(e);process.exit(1);});",
+      ]
+    environment:
+      NODE_ENV: production
+      DB_HOST: db # use the service name, not 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: on-failure
+
+  # ─── API Server ──────────────────────────────────────────────────────────────
+  api:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: db # service name resolves inside Docker's network
+      DB_PORT: 3306
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      ADJUTOR_API_KEY: ${ADJUTOR_API_KEY}
+      ADJUTOR_BASE_URL: ${ADJUTOR_BASE_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  db_data: # named volume so MySQL data survives container restarts
