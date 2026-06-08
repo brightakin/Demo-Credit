@@ -7,8 +7,8 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "dev": "nodemon --exec ts-node src/server.ts",
-    "migrate": "knex migrate:latest --knexfile knexfile.cjs --env ${NODE_ENV:-development}",
-    "migrate:rollback": "knex migrate:rollback --knexfile knexfile.cjs --env ${NODE_ENV:-development}",
+    "migrate": "knex migrate:latest --knexfile knexfile.cjs --env ${NODE_ENV:-production}",
+    "migrate:rollback": "knex migrate:rollback --knexfile knexfile.cjs --env ${NODE_ENV:-production}",
     "test": "jest --runInBand --forceExit",
     "test:coverage": "jest --coverage --runInBand --forceExit"
   },

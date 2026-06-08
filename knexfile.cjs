@@ -1,4 +1,15 @@
+const fs = require("fs");
 const path = require("path");
+
+const srcMigrationsDir = path.resolve(__dirname, "src/database/migrations");
+const distMigrationsDir = path.resolve(__dirname, "dist/database/migrations");
+
+// In local dev we run TS migrations from src/, but in deployed containers
+// only dist/ exists, so we automatically switch to JS migrations there.
+const usesSrcMigrations = fs.existsSync(srcMigrationsDir);
+const runtimeMigrationsDir = usesSrcMigrations ? srcMigrationsDir : distMigrationsDir;
+const runtimeMigrationExtension = usesSrcMigrations ? "ts" : "js";
+const runtimeLoadExtensions = usesSrcMigrations ? [".ts"] : [".js"];
 
 const config = {
   development: {
@@ -11,8 +22,9 @@ const config = {
       database: process.env.DB_NAME || "demo_credit",
     },
     migrations: {
-      directory: path.resolve(__dirname, "src/database/migrations"),
-      extension: "ts",
+      directory: runtimeMigrationsDir,
+      extension: runtimeMigrationExtension,
+      loadExtensions: runtimeLoadExtensions,
     },
   },
   test: {
@@ -25,8 +37,9 @@ const config = {
       database: process.env.DB_NAME || "demo_credit_test",
     },
     migrations: {
-      directory: path.resolve(__dirname, "src/database/migrations"),
-      extension: "ts",
+      directory: runtimeMigrationsDir,
+      extension: runtimeMigrationExtension,
+      loadExtensions: runtimeLoadExtensions,
     },
   },
   production: {
