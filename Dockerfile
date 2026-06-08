@@ -31,6 +31,7 @@ RUN yarn install --frozen-lockfile --production
 
 # Copy the compiled JavaScript from the builder stage
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/knexfile.cjs ./knexfile.cjs
 
 EXPOSE 3000
 
