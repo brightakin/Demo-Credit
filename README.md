@@ -4,6 +4,15 @@
 
 Demo Credit Wallet Service is a wallet management API that enables users to create accounts, fund wallets, transfer funds, and withdraw funds securely.
 
+## Deployment
+
+For Render native Node deployments, compile the TypeScript sources during the build step and start the compiled server entrypoint.
+
+- Build Command: `yarn install --frozen-lockfile && yarn build`
+- Start Command: `yarn start`
+
+Do not start the service with `node dist/app.js`. That file only exports the Express application. The HTTP server boots from `dist/server.js`.
+
 The service integrates with the Adjutor Karma Blacklist API to prevent onboarding users who have been blacklisted. It is built using Node.js, TypeScript, MySQL, and Knex, following a layered architecture that promotes maintainability, scalability, and testability.
 
 ### Features
