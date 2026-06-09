@@ -123,27 +123,6 @@ Maintains an immutable audit trail.
 | reference | Unique reference                |
 | status    | Transaction status              |
 
-### Transfers
-
-Stores transfer-specific records.
-
-| Column             | Description               |
-| ------------------ | ------------------------- |
-| sender_wallet_id   | Sender wallet             |
-| receiver_wallet_id | Receiver wallet           |
-| amount             | Transfer amount           |
-| reference          | Unique transfer reference |
-
-### Idempotency Keys
-
-Prevents duplicate processing of financial operations.
-
-| Column   | Description             |
-| -------- | ----------------------- |
-| key      | Unique idempotency key  |
-| user_id  | Request owner           |
-| response | Cached response payload |
-
 ---
 
 ## Authentication
