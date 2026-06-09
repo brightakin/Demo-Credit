@@ -276,7 +276,7 @@ http://localhost:3000/docs
 Production:
 
 ```text
-https://<candidate-name>-lendsqr-be-test.<cloud-domain>/docs
+https://demo-credit-production.up.railway.app/api-docs
 ```
 
 ---
@@ -299,7 +299,7 @@ https://<candidate-name>-lendsqr-be-test.<cloud-domain>/docs
 ### Clone Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/brightakin/Demo-Credit
 
 cd demo-credit-wallet-service
 ```
@@ -307,7 +307,7 @@ cd demo-credit-wallet-service
 ### Install Dependencies
 
 ```bash
-npm install
+yarn install
 ```
 
 ### Environment Variables
@@ -317,9 +317,9 @@ Create a `.env` file:
 ```env
 PORT=3000
 
-DB_HOST=localhost
+DB_HOST=localhost or production db host
 DB_PORT=3306
-DB_NAME=wallet_service
+DB_NAME=wallet_service or production db name
 
 DB_USER=root
 DB_PASSWORD=password
@@ -332,13 +332,13 @@ ADJUTOR_API_KEY=your-api-key
 ### Run Migrations
 
 ```bash
-npm run migrate
+yarn migrate
 ```
 
 ### Run Application
 
 ```bash
-npm run dev
+yarn dev / docker-compose up
 ```
 
 ---
@@ -348,7 +348,7 @@ npm run dev
 Run all tests:
 
 ```bash
-npm test
+yarn test
 ```
 
 Generate coverage report:
@@ -392,30 +392,6 @@ Positive and negative scenarios are covered.
 - Webhook notifications
 - Fraud detection and monitoring
 - Rate limiting and abuse protection
-
----
-
-## Deployment
-
-### API
-
-```text
-https://<candidate-name>-lendsqr-be-test.<cloud-domain>
-```
-
-### Swagger Documentation
-
-```text
-https://<candidate-name>-lendsqr-be-test.<cloud-domain>/docs
-```
-
----
-
-## Repository
-
-```text
-https://github.com/<username>/<repository-name>
-```
 
 ---
 
